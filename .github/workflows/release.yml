@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: darwin-arm64
+            bun_target: bun-darwin-arm64
+          - os: macos-13
+            target: darwin-x64
+            bun_target: bun-darwin-x64
+          - os: ubuntu-latest
+            target: linux-x64
+            bun_target: bun-linux-x64
+          - os: ubuntu-latest
+            target: linux-arm64
+            bun_target: bun-linux-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Build
+        run: |
+          bun build src/cli.ts --compile --target=${{ matrix.bun_target }} --outfile granola
+          tar -czf granola-${{ matrix.target }}.tar.gz granola
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: granola-${{ matrix.target }}
+          path: granola-${{ matrix.target }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: granola-*.tar.gz
+          generate_release_notes: true
