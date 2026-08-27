@@ -3,7 +3,7 @@
 // Requires mcporter installed + OAuth completed:
 //   mcporter auth granola --config <config>
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import * as os from "node:os";
 
@@ -19,11 +19,16 @@ function isMcpError(result: unknown): result is McpError {
   return typeof result === "object" && result !== null && "error" in result;
 }
 
-/** Call a Granola MCP tool via mcporter */
-export function callMcp(toolExpr: string): string | McpError {
+/** Call a Granola MCP tool via mcporter.
+ *
+ * Arguments are sent as a JSON payload over --args and the binary is invoked
+ * directly, so no caller-supplied value is ever parsed by a shell or by
+ * mcporter's function-call syntax. */
+export function callMcp(tool: string, args: Record<string, unknown> = {}): string | McpError {
   try {
-    const output = execSync(
-      `mcporter call --config ${JSON.stringify(CONFIG_PATH)} ${JSON.stringify(`granola.${toolExpr}`)}`,
+    const output = execFileSync(
+      "mcporter",
+      ["call", "--config", CONFIG_PATH, `granola.${tool}`, "--args", JSON.stringify(args)],
       { encoding: "utf-8", timeout: 30_000, stdio: ["pipe", "pipe", "pipe"] }
     );
     return output.trim();

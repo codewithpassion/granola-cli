@@ -61,7 +61,7 @@ if (!command) {
   ensureConfig();
   let healthy = false;
   try {
-    const result = callMcp('list_meetings(time_range: "this_week")');
+    const result = callMcp("list_meetings", { time_range: "this_week" });
     healthy = typeof result === "string";
   } catch {}
 
@@ -93,19 +93,19 @@ if (command === "auth") {
   ensureConfig();
   const reset = hasFlag("reset");
   try {
-    const { execSync } = await import("node:child_process");
-    const cmd = `mcporter auth granola${reset ? " --reset" : ""} --config ${JSON.stringify(CONFIG_PATH)} --oauth-timeout 180000`;
+    const { execFileSync } = await import("node:child_process");
+    const argv = ["auth", "granola", ...(reset ? ["--reset"] : []), "--config", CONFIG_PATH, "--oauth-timeout", "180000"];
     print(
       success("granola auth", {
         message: "Starting OAuth flow — approve in your browser",
-        command_run: cmd,
+        command_run: ["mcporter", ...argv].join(" "),
         note: "If on a remote machine, tunnel port 61200: ssh -L 61200:127.0.0.1:61200 joel@panda -N",
       }, [
         { command: "granola", description: "Check connection status after auth" },
         { command: "granola meetings", description: "List meetings to verify" },
       ])
     );
-    execSync(cmd, { stdio: "inherit", timeout: 200_000 });
+    execFileSync("mcporter", argv, { stdio: "inherit", timeout: 200_000 });
   } catch (err: any) {
     print(
       fail("granola auth", err.message || "Auth failed", "AUTH_FAILED", "Try: granola auth --reset", [])
@@ -130,7 +130,7 @@ if (command === "meetings") {
     process.exit(1);
   }
 
-  let expr = `list_meetings(time_range: "${range}")`;
+  const mcpArgs: Record<string, unknown> = { time_range: range };
   if (range === "custom") {
     const start = getFlag("start");
     const end = getFlag("end");
@@ -140,10 +140,11 @@ if (command === "meetings") {
       );
       process.exit(1);
     }
-    expr = `list_meetings(time_range: "custom", custom_start: "${start}", custom_end: "${end}")`;
+    mcpArgs.custom_start = start;
+    mcpArgs.custom_end = end;
   }
 
-  const result = callMcp(expr);
+  const result = callMcp("list_meetings", mcpArgs);
   if (typeof result !== "string") handleMcpError("granola meetings", result);
 
   const meetings = parseMeetingsList(result);
@@ -194,7 +195,7 @@ if (command === "meeting") {
   const wantTranscript = hasFlag("transcript");
 
   if (wantTranscript) {
-    const result = callMcp(`get_meeting_transcript(meeting_id: "${meetingId}")`);
+    const result = callMcp("get_meeting_transcript", { meeting_id: meetingId });
     if (typeof result !== "string") handleMcpError(`granola meeting ${meetingId} --transcript`, result);
 
     // Context protection: cap transcript output
@@ -213,7 +214,7 @@ if (command === "meeting") {
       ])
     );
   } else {
-    const result = callMcp(`get_meetings(meeting_ids: ["${meetingId}"])`);
+    const result = callMcp("get_meetings", { meeting_ids: [meetingId] });
     if (typeof result !== "string") handleMcpError(`granola meeting ${meetingId}`, result);
 
     print(
@@ -243,8 +244,7 @@ if (command === "search") {
     process.exit(1);
   }
 
-  const escapedQuery = query.replace(/"/g, '\\"');
-  const result = callMcp(`query_granola_meetings(query: "${escapedQuery}")`);
+  const result = callMcp("query_granola_meetings", { query });
   if (typeof result !== "string") handleMcpError("granola search", result);
 
   print(
